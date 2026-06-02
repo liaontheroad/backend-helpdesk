@@ -10,12 +10,22 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use OpenApi\Attributes as OA;
 
 class TicketController extends Controller
 {
     // ── GET /api/tickets ──────────────────────────────────────────────────────
-    // Users    → only their own tickets
-    // Helpdesk → all tickets, filterable
+#[OA\Get(
+    path: "/api/tickets",
+    summary: "Menampilkan daftar tiket",
+    description: "Mengambil daftar tiket helpdesk milik user atau seluruh tiket untuk admin/helpdesk.",
+    tags: ["Tickets"],
+    security: [["bearerAuth" => []]],
+    responses: [
+        new OA\Response(response: 200, description: "Daftar tiket berhasil diambil"),
+        new OA\Response(response: 401, description: "Unauthenticated")
+    ]
+)]
     public function index(Request $request)
     {
         $user  = $request->user();
@@ -52,8 +62,32 @@ class TicketController extends Controller
 
         return response()->json($tickets);
     }
-
+    #[OA\Post(
+        path: "/api/tickets",
+        summary: "Membuat tiket baru",
+        description: "User membuat tiket helpdesk baru.",
+        tags: ["Tickets"],
+        security: [["bearerAuth" => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["title", "description"],
+                properties: [
+                    new OA\Property(property: "title", type: "string", example: "Laptop tidak bisa menyala"),
+                    new OA\Property(property: "description", type: "string", example: "Laptop mati total setelah update Windows."),
+                    new OA\Property(property: "category", type: "string", example: "Hardware"),
+                    new OA\Property(property: "priority", type: "string", example: "High")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: "Tiket berhasil dibuat"),
+            new OA\Response(response: 401, description: "Unauthenticated"),
+            new OA\Response(response: 422, description: "Validasi gagal")
+        ]
+    )]
     // ── POST /api/tickets ─────────────────────────────────────────────────────
+
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -102,7 +136,27 @@ class TicketController extends Controller
             'ticket'  => $this->formatTicket($ticket),
         ], 201);
     }
-
+    #[OA\Get(
+        path: "/api/tickets/{id}",
+        summary: "Menampilkan detail tiket",
+        description: "Mengambil detail tiket berdasarkan ID.",
+        tags: ["Tickets"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(
+                name: "id",
+                in: "path",
+                required: true,
+                description: "ID tiket",
+                schema: new OA\Schema(type: "integer", example: 1)
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: "Detail tiket berhasil diambil"),
+            new OA\Response(response: 401, description: "Unauthenticated"),
+            new OA\Response(response: 404, description: "Tiket tidak ditemukan")
+        ]
+    )]
     // ── GET /api/tickets/{id} ─────────────────────────────────────────────────
     public function show(Request $request, string $id)
     {
@@ -121,7 +175,37 @@ class TicketController extends Controller
             'ticket' => $this->formatTicket($ticket),
         ]);
     }
-
+    #[OA\Patch(
+        path: "/api/tickets/{id}/status",
+        summary: "Mengubah status tiket",
+        description: "Mengubah status tiket helpdesk, misalnya open, in_progress, resolved, atau closed.",
+        tags: ["Tickets"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(
+                name: "id",
+                in: "path",
+                required: true,
+                description: "ID tiket",
+                schema: new OA\Schema(type: "integer", example: 1)
+            )
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["status"],
+                properties: [
+                    new OA\Property(property: "status", type: "string", example: "in_progress")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: "Status tiket berhasil diperbarui"),
+            new OA\Response(response: 401, description: "Unauthenticated"),
+            new OA\Response(response: 422, description: "Validasi gagal"),
+            new OA\Response(response: 404, description: "Tiket tidak ditemukan")
+        ]
+    )]
     // ── PATCH /api/tickets/{id}/status ────────────────────────────────────────
     public function updateStatus(Request $request, string $id)
     {
@@ -161,7 +245,37 @@ class TicketController extends Controller
             'ticket'  => $this->formatTicket($ticket),
         ]);
     }
-
+    #[OA\Patch(
+        path: "/api/tickets/{id}/assign",
+        summary: "Assign tiket ke helpdesk",
+        description: "Menugaskan tiket kepada helpdesk tertentu.",
+        tags: ["Tickets"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(
+                name: "id",
+                in: "path",
+                required: true,
+                description: "ID tiket",
+                schema: new OA\Schema(type: "integer", example: 1)
+            )
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["assigned_to"],
+                properties: [
+                    new OA\Property(property: "assigned_to", type: "integer", example: 2)
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: "Tiket berhasil di-assign"),
+            new OA\Response(response: 401, description: "Unauthenticated"),
+            new OA\Response(response: 422, description: "Validasi gagal"),
+            new OA\Response(response: 404, description: "Tiket tidak ditemukan")
+        ]
+    )]
     // ── PATCH /api/tickets/{id}/assign ────────────────────────────────────────
     public function assign(Request $request, string $id)
     {
@@ -210,7 +324,27 @@ class TicketController extends Controller
     }
 
     // ── GET /api/tickets/{id}/history ─────────────────────────────────────────
-    // Returns the full ticket with all comments (for tracking/history view)
+    #[OA\Get(
+        path: "/api/tickets/{id}/history",
+        summary: "Menampilkan riwayat tiket",
+        description: "Mengambil riwayat perubahan status atau aktivitas pada tiket.",
+        tags: ["Tickets"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(
+                name: "id",
+                in: "path",
+                required: true,
+                description: "ID tiket",
+                schema: new OA\Schema(type: "integer", example: 1)
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: "Riwayat tiket berhasil diambil"),
+            new OA\Response(response: 401, description: "Unauthenticated"),
+            new OA\Response(response: 404, description: "Tiket tidak ditemukan")
+        ]
+    )]
     public function history(Request $request, string $id)
     {
         $ticket = Ticket::with([

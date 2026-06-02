@@ -9,9 +9,21 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password as PasswordRule;
+use OpenApi\Attributes as OA;
 
 class ProfileController extends Controller
 {
+    #[OA\Get(
+        path: "/api/profile",
+        summary: "Menampilkan profil user",
+        description: "Mengambil data profil user yang sedang login.",
+        tags: ["Profile"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(response: 200, description: "Profil berhasil diambil"),
+            new OA\Response(response: 401, description: "Unauthenticated")
+        ]
+    )]
     // ── GET /api/profile ──────────────────────────────────────────────────────
     public function show(Request $request)
     {
@@ -19,7 +31,27 @@ class ProfileController extends Controller
             'user' => $request->user(),
         ]);
     }
-
+    #[OA\Put(
+        path: "/api/profile",
+        summary: "Update profil user",
+        description: "Memperbarui data profil user yang sedang login.",
+        tags: ["Profile"],
+        security: [["bearerAuth" => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: "name", type: "string", example: "Annisa Putri"),
+                    new OA\Property(property: "email", type: "string", example: "annisa@example.com")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: "Profil berhasil diperbarui"),
+            new OA\Response(response: 401, description: "Unauthenticated"),
+            new OA\Response(response: 422, description: "Validasi gagal")
+        ]
+    )]
     // ── PUT /api/profile ──────────────────────────────────────────────────────
     public function update(Request $request)
     {
@@ -59,7 +91,29 @@ class ProfileController extends Controller
             'user'    => $user->fresh(),
         ]);
     }
-
+    #[OA\Put(
+        path: "/api/profile/change-password",
+        summary: "Mengubah password",
+        description: "Mengubah password user yang sedang login.",
+        tags: ["Profile"],
+        security: [["bearerAuth" => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["current_password", "password", "password_confirmation"],
+                properties: [
+                    new OA\Property(property: "current_password", type: "string", example: "oldpassword123"),
+                    new OA\Property(property: "password", type: "string", example: "newpassword123"),
+                    new OA\Property(property: "password_confirmation", type: "string", example: "newpassword123")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: "Password berhasil diubah"),
+            new OA\Response(response: 401, description: "Unauthenticated"),
+            new OA\Response(response: 422, description: "Validasi gagal")
+        ]
+    )]
     // ── PUT /api/profile/change-password ─────────────────────────────────────
     public function changePassword(Request $request)
     {
@@ -94,9 +148,18 @@ class ProfileController extends Controller
             'message' => 'Password berhasil diubah. Silakan login kembali.',
         ]);
     }
-
+    #[OA\Get(
+        path: "/api/helpdesks",
+        summary: "Menampilkan daftar helpdesk",
+        description: "Mengambil daftar user dengan role helpdesk untuk kebutuhan assignment tiket.",
+        tags: ["Profile"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(response: 200, description: "Daftar helpdesk berhasil diambil"),
+            new OA\Response(response: 401, description: "Unauthenticated")
+        ]
+    )]
     // ── GET /api/helpdesks ────────────────────────────────────────────────────
-    // Used by admin when assigning tickets — returns list of helpdesk agents
     public function helpdesks(Request $request)
     {
         if (! $request->user()->isHelpdesk()) {

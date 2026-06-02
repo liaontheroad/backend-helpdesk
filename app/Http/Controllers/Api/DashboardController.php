@@ -7,9 +7,21 @@ use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use OpenApi\Attributes as OA;
 
 class DashboardController extends Controller
 {
+    #[OA\Get(
+        path: "/api/dashboard/stats",
+        summary: "Menampilkan statistik dashboard",
+        description: "Mengambil ringkasan statistik tiket seperti total tiket, tiket open, in progress, resolved, dan closed.",
+        tags: ["Dashboard"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(response: 200, description: "Statistik dashboard berhasil diambil"),
+            new OA\Response(response: 401, description: "Unauthenticated")
+        ]
+    )]
     // ── GET /api/dashboard/stats ──────────────────────────────────────────────
     public function stats(Request $request)
     {
@@ -21,7 +33,17 @@ class DashboardController extends Controller
 
         return $this->staffStats($user);
     }
-
+    #[OA\Get(
+    path: "/api/dashboard/recent-tickets",
+    summary: "Menampilkan tiket terbaru",
+    description: "Mengambil daftar tiket terbaru untuk ditampilkan pada dashboard.",
+    tags: ["Dashboard"],
+    security: [["bearerAuth" => []]],
+    responses: [
+        new OA\Response(response: 200, description: "Tiket terbaru berhasil diambil"),
+        new OA\Response(response: 401, description: "Unauthenticated")
+    ]
+)]
     // ── GET /api/dashboard/recent-tickets ─────────────────────────────────────
     public function recentTickets(Request $request)
     {
