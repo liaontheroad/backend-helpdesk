@@ -433,6 +433,29 @@
                 ]
             }
         },
+        "/api/dashboard/statistics": {
+            "get": {
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Dashboard statistics",
+                "description": "Returns ticket statistics including overview, priority, category distribution, and role-specific statistics for admin or helpdesk.",
+                "operationId": "addf8c82a321a06898e953647b288fd4",
+                "responses": {
+                    "200": {
+                        "description": "Statistics retrieved successfully"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/notifications": {
             "get": {
                 "tags": [
@@ -838,57 +861,34 @@
                 ]
             }
         },
-        "/api/tickets/{id}/status": {
+        "/api/tickets/{id}/finish": {
             "patch": {
                 "tags": [
                     "Tickets"
                 ],
-                "summary": "Mengubah status tiket",
-                "description": "Mengubah status tiket helpdesk, misalnya open, in_progress, resolved, atau closed.",
-                "operationId": "67aa843d6c1b3c738a0a1d80c45cf7bf",
+                "summary": "Finish ticket",
+                "description": "Helpdesk marks a ticket as completed. Ticket status automatically becomes closed.",
+                "operationId": "2bd1052b2983e4e16acc5c411da2e246",
                 "parameters": [
                     {
                         "name": "id",
                         "in": "path",
-                        "description": "ID tiket",
+                        "description": "Ticket ID",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "example": 1
+                            "type": "string"
                         }
                     }
                 ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "required": [
-                                    "status"
-                                ],
-                                "properties": {
-                                    "status": {
-                                        "type": "string",
-                                        "example": "in_progress"
-                                    }
-                                },
-                                "type": "object"
-                            }
-                        }
-                    }
-                },
                 "responses": {
                     "200": {
-                        "description": "Status tiket berhasil diperbarui"
+                        "description": "Ticket closed successfully"
                     },
-                    "401": {
-                        "description": "Unauthenticated"
-                    },
-                    "422": {
-                        "description": "Validasi gagal"
+                    "403": {
+                        "description": "Forbidden"
                     },
                     "404": {
-                        "description": "Tiket tidak ditemukan"
+                        "description": "Ticket not found"
                     }
                 },
                 "security": [
@@ -903,18 +903,17 @@
                 "tags": [
                     "Tickets"
                 ],
-                "summary": "Assign tiket ke helpdesk",
-                "description": "Menugaskan tiket kepada helpdesk tertentu.",
+                "summary": "Assign ticket to helpdesk",
+                "description": "Admin assigns a ticket to a helpdesk. Once assigned, the ticket status automatically changes to in_progress.",
                 "operationId": "4e73265b6b81db806d8e5584c0e8acb5",
                 "parameters": [
                     {
                         "name": "id",
                         "in": "path",
-                        "description": "ID tiket",
+                        "description": "Ticket ID",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "example": 1
+                            "type": "string"
                         }
                     }
                 ],
@@ -924,12 +923,12 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "assigned_to"
+                                    "assigned_to_id"
                                 ],
                                 "properties": {
-                                    "assigned_to": {
-                                        "type": "integer",
-                                        "example": 2
+                                    "assigned_to_id": {
+                                        "type": "string",
+                                        "example": "8d3d2a75-0e4b-4f5d-b321-123456789abc"
                                     }
                                 },
                                 "type": "object"
@@ -939,16 +938,13 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Tiket berhasil di-assign"
+                        "description": "Ticket assigned successfully"
                     },
-                    "401": {
-                        "description": "Unauthenticated"
+                    "403": {
+                        "description": "Forbidden"
                     },
                     "422": {
-                        "description": "Validasi gagal"
-                    },
-                    "404": {
-                        "description": "Tiket tidak ditemukan"
+                        "description": "Validation failed"
                     }
                 },
                 "security": [
@@ -995,6 +991,28 @@
                     }
                 ]
             }
+        },
+        "/api/users": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get all users",
+                "operationId": "566aed8efb436ca506e0ef51a032ecd9",
+                "responses": {
+                    "200": {
+                        "description": "List of users"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
         }
     },
     "components": {
@@ -1030,6 +1048,10 @@
         {
             "name": "Tickets",
             "description": "Tickets"
+        },
+        {
+            "name": "Users",
+            "description": "Users"
         }
     ]
 }

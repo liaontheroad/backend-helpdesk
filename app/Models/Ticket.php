@@ -67,4 +67,9 @@ class Ticket extends Model
     {
         return $this->hasMany(TicketNotification::class, 'related_ticket_id');
     }
+
+    public function histories()
+    {
+        return $this->hasMany(TicketHistory::class);
+    }
 }

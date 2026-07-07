@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -42,12 +43,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('change-password',  [ProfileController::class, 'changePassword']);
     });
 
+    Route::get('/users', [UserController::class, 'index']);
     // Helpdesk list (for ticket assignment — helpdesk & admin only)
     Route::get('helpdesks', [ProfileController::class, 'helpdesks']);
 
     // Dashboard
     Route::prefix('dashboard')->group(function () {
         Route::get('stats',          [DashboardController::class, 'stats']);
+        Route::get('statistics',     [DashboardController::class, 'statistics']);
         Route::get('recent-tickets', [DashboardController::class, 'recentTickets']);
     });
 
@@ -57,9 +60,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/',                       [TicketController::class, 'store']);
         Route::get('/{id}',                    [TicketController::class, 'show']);
         Route::get('/{id}/history',            [TicketController::class, 'history']);
-        Route::patch('/{id}/status',           [TicketController::class, 'updateStatus']);
         Route::patch('/{id}/assign',           [TicketController::class, 'assign']);
-
+        Route::patch('/{id}/finish',           [TicketController::class, 'finish']);
+        Route::delete('/{id}',                 [TicketController::class, 'destroy']);
         // Comments (nested under ticket)
         Route::get('/{ticketId}/comments',     [CommentController::class, 'index']);
         Route::post('/{ticketId}/comments',    [CommentController::class, 'store']);

@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use App\Models\TicketAttachment;
 use App\Models\TicketNotification;
 use App\Models\User;
+use App\Models\TicketHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -32,9 +33,22 @@ class TicketController extends Controller
         $query = Ticket::with(['reporter:id,name,email', 'attachments']);
 
         // Role-based visibility
+        // ==========================
+
+        // Regular user
         if ($user->isUser()) {
+
             $query->where('reported_by_id', $user->id);
+
         }
+        // Helpdesk
+        elseif ($user->isHelpdesk() && !$user->isAdmin()) {
+
+            $query->where('assigned_to_id', $user->id);
+
+        }
+        // Admin
+        // sees all tickets
 
         // Filters
         if ($request->filled('status')) {
@@ -115,6 +129,13 @@ class TicketController extends Controller
             'reported_by_id' => $request->user()->id,
         ]);
 
+        TicketHistory::create([
+            'ticket_id'    => $ticket->id,
+            'status'       => 'open',
+            'description'  => 'Ticket created.',
+            'performed_by' => $request->user()->id,
+        ]);
+
         // Handle file uploads
         if ($request->hasFile('attachments')) {
             foreach ($request->file('attachments') as $file) {
@@ -175,10 +196,11 @@ class TicketController extends Controller
             'ticket' => $this->formatTicket($ticket),
         ]);
     }
+    
     #[OA\Patch(
-        path: "/api/tickets/{id}/status",
-        summary: "Mengubah status tiket",
-        description: "Mengubah status tiket helpdesk, misalnya open, in_progress, resolved, atau closed.",
+        path: "/api/tickets/{id}/finish",
+        summary: "Finish ticket",
+        description: "Helpdesk marks a ticket as completed. Ticket status automatically becomes closed.",
         tags: ["Tickets"],
         security: [["bearerAuth" => []]],
         parameters: [
@@ -186,69 +208,62 @@ class TicketController extends Controller
                 name: "id",
                 in: "path",
                 required: true,
-                description: "ID tiket",
-                schema: new OA\Schema(type: "integer", example: 1)
+                description: "Ticket ID",
+                schema: new OA\Schema(type: "string")
             )
         ],
-        requestBody: new OA\RequestBody(
-            required: true,
-            content: new OA\JsonContent(
-                required: ["status"],
-                properties: [
-                    new OA\Property(property: "status", type: "string", example: "in_progress")
-                ]
-            )
-        ),
         responses: [
-            new OA\Response(response: 200, description: "Status tiket berhasil diperbarui"),
-            new OA\Response(response: 401, description: "Unauthenticated"),
-            new OA\Response(response: 422, description: "Validasi gagal"),
-            new OA\Response(response: 404, description: "Tiket tidak ditemukan")
+            new OA\Response(response: 200, description: "Ticket closed successfully"),
+            new OA\Response(response: 403, description: "Forbidden"),
+            new OA\Response(response: 404, description: "Ticket not found"),
         ]
     )]
-    // ── PATCH /api/tickets/{id}/status ────────────────────────────────────────
-    public function updateStatus(Request $request, string $id)
+
+    // ── PATCH /api/tickets/{id}/finish ────────────────────────────────────────
+    public function finish(Request $request, string $id)
     {
         if ($request->user()->isUser()) {
-            return response()->json(['message' => 'Akses ditolak.'], 403);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'status' => 'required|in:open,in_progress,resolved,closed',
-        ]);
-
-        if ($validator->fails()) {
             return response()->json([
-                'message' => 'Validasi gagal.',
-                'errors'  => $validator->errors(),
-            ], 422);
+                'message' => 'Akses ditolak.'
+            ], 403);
         }
 
         $ticket = Ticket::findOrFail($id);
 
-        $oldStatus = $ticket->status;
-        $ticket->update(['status' => $request->status]);
-
-        // Notify the ticket reporter if status changed
-        if ($oldStatus !== $request->status) {
-            TicketNotification::create([
-                'user_id'           => $ticket->reported_by_id,
-                'title'             => 'Status tiket diperbarui',
-                'body'              => "Tiket \"{$ticket->title}\" sekarang berstatus {$request->status}.",
-                'type'              => 'ticket_update',
-                'related_ticket_id' => $ticket->id,
-            ]);
+        if ($ticket->status === 'closed') {
+            return response()->json([
+                'message' => 'Tiket sudah selesai.'
+            ], 422);
         }
 
+        $ticket->update([
+            'status' => 'closed',
+        ]);
+
+        TicketHistory::create([
+            'ticket_id'    => $ticket->id,
+            'status'       => 'closed',
+            'description'  => 'Ticket has been completed.',
+            'performed_by' => $request->user()->id,
+        ]);
+
+        TicketNotification::create([
+            'user_id'           => $ticket->reported_by_id,
+            'title'             => 'Tiket selesai',
+            'body'              => "Tiket \"{$ticket->title}\" telah selesai dikerjakan.",
+            'type'              => 'ticket_closed',
+            'related_ticket_id' => $ticket->id,
+        ]);
+
         return response()->json([
-            'message' => 'Status tiket berhasil diperbarui.',
-            'ticket'  => $this->formatTicket($ticket),
+            'message' => 'Tiket berhasil diselesaikan.',
+            'ticket'  => $this->formatTicket($ticket->fresh()),
         ]);
     }
     #[OA\Patch(
         path: "/api/tickets/{id}/assign",
-        summary: "Assign tiket ke helpdesk",
-        description: "Menugaskan tiket kepada helpdesk tertentu.",
+        summary: "Assign ticket to helpdesk",
+        description: "Admin assigns a ticket to a helpdesk. Once assigned, the ticket status automatically changes to in_progress.",
         tags: ["Tickets"],
         security: [["bearerAuth" => []]],
         parameters: [
@@ -256,26 +271,30 @@ class TicketController extends Controller
                 name: "id",
                 in: "path",
                 required: true,
-                description: "ID tiket",
-                schema: new OA\Schema(type: "integer", example: 1)
+                description: "Ticket ID",
+                schema: new OA\Schema(type: "string")
             )
         ],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ["assigned_to"],
+                required: ["assigned_to_id"],
                 properties: [
-                    new OA\Property(property: "assigned_to", type: "integer", example: 2)
+                    new OA\Property(
+                        property: "assigned_to_id",
+                        type: "string",
+                        example: "8d3d2a75-0e4b-4f5d-b321-123456789abc"
+                    ),
                 ]
             )
         ),
         responses: [
-            new OA\Response(response: 200, description: "Tiket berhasil di-assign"),
-            new OA\Response(response: 401, description: "Unauthenticated"),
-            new OA\Response(response: 422, description: "Validasi gagal"),
-            new OA\Response(response: 404, description: "Tiket tidak ditemukan")
+            new OA\Response(response: 200, description: "Ticket assigned successfully"),
+            new OA\Response(response: 403, description: "Forbidden"),
+            new OA\Response(response: 422, description: "Validation failed"),
         ]
     )]
+
     // ── PATCH /api/tickets/{id}/assign ────────────────────────────────────────
     public function assign(Request $request, string $id)
     {
@@ -306,13 +325,21 @@ class TicketController extends Controller
         $ticket->update([
             'assigned_to_id'   => $assignee->id,
             'assigned_to_name' => $assignee->name,
+            'status' => 'in_progress',
+        ]);
+
+        TicketHistory::create([
+            'ticket_id'    => $ticket->id,
+            'status'       => 'in_progress',
+            'description'  => "Assigned to {$assignee->name}. Ticket is now in progress.",
+            'performed_by' => $request->user()->id,
         ]);
 
         // Notify the assigned helpdesk
         TicketNotification::create([
             'user_id'           => $assignee->id,
             'title'             => 'Tiket baru ditugaskan ke kamu',
-            'body'              => "Tiket \"{$ticket->title}\" telah ditugaskan ke kamu.",
+            'body'              => "Tiket \"{$ticket->title}\" telah ditugaskan ke kamu dan siap untuk dikerjakan.",
             'type'              => 'ticket_assigned',
             'related_ticket_id' => $ticket->id,
         ]);
@@ -322,6 +349,7 @@ class TicketController extends Controller
             'ticket'  => $this->formatTicket($ticket),
         ]);
     }
+
 
     // ── GET /api/tickets/{id}/history ─────────────────────────────────────────
     #[OA\Get(
@@ -354,14 +382,32 @@ class TicketController extends Controller
             'comments.attachments',
         ])->findOrFail($id);
 
-        if ($request->user()->isUser() && $ticket->reported_by_id !== $request->user()->id) {
-            return response()->json(['message' => 'Akses ditolak.'], 403);
+        // Users can only view their own tickets
+        if ($request->user()->isUser() &&
+            $ticket->reported_by_id !== $request->user()->id) {
+            return response()->json([
+                'message' => 'Akses ditolak.'
+            ], 403);
         }
+
+        $timeline = TicketHistory::with('user')
+            ->where('ticket_id', $ticket->id)
+            ->orderBy('created_at')
+            ->get()
+            ->map(function ($history) {
+                return [
+                    'id'           => $history->id,
+                    'status'       => $history->status,
+                    'description'  => $history->description,
+                    'performed_by' => $history->user?->name,
+                    'created_at'   => $history->created_at,
+                ];
+            });
 
         return response()->json([
             'ticket'   => $this->formatTicket($ticket),
             'comments' => $ticket->comments,
-            'timeline' => $this->buildTimeline($ticket),
+            'timeline' => $timeline,
         ]);
     }
 
@@ -385,38 +431,30 @@ class TicketController extends Controller
             'updated_at'       => $ticket->updated_at,
         ];
     }
-
-    private function buildTimeline(Ticket $ticket): array
+   public function destroy(Request $request, string $id)
     {
-        $events = [];
+        $user = $request->user();
 
-        $events[] = [
-            'type'       => 'created',
-            'label'      => 'Tiket dibuat',
-            'actor'      => $ticket->reporter?->name ?? 'Unknown',
-            'created_at' => $ticket->created_at,
-        ];
-
-        if ($ticket->assigned_to_name) {
-            $events[] = [
-                'type'       => 'assigned',
-                'label'      => "Di-assign ke {$ticket->assigned_to_name}",
-                'actor'      => $ticket->assigned_to_name,
-                'created_at' => $ticket->updated_at,
-            ];
+        // Only admin can delete
+        if (! $user->isAdmin()) {
+            return response()->json([
+                'message' => 'Only admin can delete tickets.'
+            ], 403);
         }
 
-        foreach ($ticket->comments as $comment) {
-            $events[] = [
-                'type'       => 'comment',
-                'label'      => "{$comment->author_name} menambahkan komentar",
-                'actor'      => $comment->author_name,
-                'created_at' => $comment->created_at,
-            ];
-        }
+        $ticket = Ticket::findOrFail($id);
 
-        usort($events, fn($a, $b) => $a['created_at'] <=> $b['created_at']);
+        // Delete related data first
+        $ticket->comments()->delete();
+        $ticket->attachments()->delete();
+        $ticket->notifications()->delete();
+        $ticket->histories()->delete();
 
-        return $events;
-    }
+        // Delete ticket
+        $ticket->delete();
+
+        return response()->json([
+            'message' => 'Ticket deleted successfully.'
+        ]);
+    } 
 }

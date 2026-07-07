@@ -162,17 +162,21 @@ class ProfileController extends Controller
     // ── GET /api/helpdesks ────────────────────────────────────────────────────
     public function helpdesks(Request $request)
     {
-        if (! $request->user()->isHelpdesk()) {
-            return response()->json(['message' => 'Akses ditolak.'], 403);
+        if ($request->user()->role !== 'admin') {
+            return response()->json([
+                'message' => 'Akses ditolak.'
+            ], 403);
         }
 
-        $helpdesks = User::whereIn('role', ['helpdesk', 'admin'])
+        $helpdesks = User::whereIn('role', ['helpdesk'])
             ->select('id', 'name', 'email', 'avatar_url', 'role')
             ->orderBy('name')
             ->get();
 
         return response()->json([
-            'helpdesks' => $helpdesks,
+        'helpdesks' => $helpdesks,
         ]);
+        
+        dd($helpdesks->toArray());
     }
 }
